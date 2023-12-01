@@ -122,3 +122,62 @@ func main() {
 	}
 }
 ```
+
+## Global Privacy Platform custom parsers
+
+Each way also support the ability to customize the parsers used. This is useful if you want to use your own custom
+parsers for a given section, or if you want to support a section that is not currently supported by this package.
+
+Example custom sections parser use:
+```go
+package main
+
+import "github.com/LiveRamp/iabconsent"
+
+func main() {
+	var consent = "DBABrGA~BVVqAAEABCA~BVoYYZoI~BVoYYYI~BVoYYQg~BVaGGGCA~BVoYYYQg"
+
+	// Parse Entire String via function using your custom parser's setup
+	var gppConsents, err = iabconsent.ParseGppConsent(consent, customParsers())
+	if err != nil {
+		panic(err)
+	}
+	var tcfEuConsent = gppConsents[2]
+	var tcfEu, ok = tcfEuConsent.(*iabconsent.V2ParsedConsent)
+	if !ok {
+		// Not TCFv2 EU ParsedConsent
+	}
+	if tcfEu.Version == 2 {
+		// Can check specific values/fields to determine your own requirements to process.
+	}
+}
+
+func customParsers() *iabconsent.Options {
+	return &iabconsent.Options{
+		GppSectionParser: func(gppSectionID int, sectionString string) iabconsent.GppSectionParser {
+			switch gppSectionID {
+			case 2:
+				return &TcfV2GppSectionParser{
+					iabconsent.GppSection{SectionId: gppSectionID, SectionValue: sectionString},
+				}
+			}
+
+			return iabconsent.NewMspa(gppSectionID, sectionString)
+		},
+	}
+}
+
+type TcfV2GppSectionParser struct {
+	iabconsent.GppSection
+}
+
+func (p *TcfV2GppSectionParser) ParseConsent() (iabconsent.GppParsedConsent, error) {
+	tcfEuV2Parsed, err := iabconsent.ParseV2(p.SectionValue)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return tcfEuV2Parsed, nil
+}
+```
