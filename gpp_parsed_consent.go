@@ -33,8 +33,8 @@ type GppParsedConsent interface {
 // GppSection contains the specific Section ID (important to match up correct parsing).
 // and pre-parsed Section Value, including all subsections.
 type GppSection struct {
-	SectionId    int
-	SectionValue string
+	sectionId    int
+	sectionValue string
 }
 
 type Options struct {
@@ -62,7 +62,7 @@ type GppSectionParser interface {
 
 // GetSectionId returns the Section ID for a given GppSection.
 func (g *GppSection) GetSectionId() int {
-	return g.SectionId
+	return g.sectionId
 }
 
 type GppSubSection struct {

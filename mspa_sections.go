@@ -36,17 +36,17 @@ type MspaUsCT struct {
 func NewMspa(sid int, section string) GppSectionParser {
 	switch sid {
 	case UsNationalSID:
-		return &MspaUsNational{GppSection{SectionId: UsNationalSID, SectionValue: section}}
+		return &MspaUsNational{GppSection{sectionId: UsNationalSID, sectionValue: section}}
 	case UsCaliforniaSID:
-		return &MspaUsCA{GppSection{SectionId: UsCaliforniaSID, SectionValue: section}}
+		return &MspaUsCA{GppSection{sectionId: UsCaliforniaSID, sectionValue: section}}
 	case UsVirginiaSID:
-		return &MspaUsVA{GppSection{SectionId: UsVirginiaSID, SectionValue: section}}
+		return &MspaUsVA{GppSection{sectionId: UsVirginiaSID, sectionValue: section}}
 	case UsColoradoSID:
-		return &MspaUsCO{GppSection{SectionId: UsColoradoSID, SectionValue: section}}
+		return &MspaUsCO{GppSection{sectionId: UsColoradoSID, sectionValue: section}}
 	case UsUtahSID:
-		return &MspaUsUT{GppSection{SectionId: UsUtahSID, SectionValue: section}}
+		return &MspaUsUT{GppSection{sectionId: UsUtahSID, sectionValue: section}}
 	case UsConnecticutSID:
-		return &MspaUsCT{GppSection{SectionId: UsConnecticutSID, SectionValue: section}}
+		return &MspaUsCT{GppSection{sectionId: UsConnecticutSID, sectionValue: section}}
 	}
 	// Skip if no matching struct, as Section ID is not supported yet.
 	// Any newly supported Section IDs should be added as cases here.
@@ -54,7 +54,7 @@ func NewMspa(sid int, section string) GppSectionParser {
 }
 
 func (m *MspaUsNational) ParseConsent() (GppParsedConsent, error) {
-	var segments = strings.Split(m.SectionValue, ".")
+	var segments = strings.Split(m.sectionValue, ".")
 
 	var b, err = base64.RawURLEncoding.DecodeString(segments[0])
 	if err != nil {
@@ -101,7 +101,7 @@ func (m *MspaUsNational) ParseConsent() (GppParsedConsent, error) {
 }
 
 func (m *MspaUsCA) ParseConsent() (GppParsedConsent, error) {
-	var segments = strings.Split(m.SectionValue, ".")
+	var segments = strings.Split(m.sectionValue, ".")
 
 	var b, err = base64.RawURLEncoding.DecodeString(segments[0])
 	if err != nil {
@@ -145,7 +145,7 @@ func (m *MspaUsCA) ParseConsent() (GppParsedConsent, error) {
 }
 
 func (m *MspaUsVA) ParseConsent() (GppParsedConsent, error) {
-	var segments = strings.Split(m.SectionValue, ".")
+	var segments = strings.Split(m.sectionValue, ".")
 
 	var b, err = base64.RawURLEncoding.DecodeString(segments[0])
 	if err != nil {
@@ -187,7 +187,7 @@ func (m *MspaUsVA) ParseConsent() (GppParsedConsent, error) {
 }
 
 func (m *MspaUsCO) ParseConsent() (GppParsedConsent, error) {
-	var segments = strings.Split(m.SectionValue, ".")
+	var segments = strings.Split(m.sectionValue, ".")
 
 	var b, err = base64.RawURLEncoding.DecodeString(segments[0])
 	if err != nil {
@@ -229,7 +229,7 @@ func (m *MspaUsCO) ParseConsent() (GppParsedConsent, error) {
 }
 
 func (m *MspaUsUT) ParseConsent() (GppParsedConsent, error) {
-	var segments = strings.Split(m.SectionValue, ".")
+	var segments = strings.Split(m.sectionValue, ".")
 
 	var b, err = base64.RawURLEncoding.DecodeString(segments[0])
 	if err != nil {
@@ -272,7 +272,7 @@ func (m *MspaUsUT) ParseConsent() (GppParsedConsent, error) {
 }
 
 func (m *MspaUsCT) ParseConsent() (GppParsedConsent, error) {
-	var segments = strings.Split(m.SectionValue, ".")
+	var segments = strings.Split(m.sectionValue, ".")
 
 	var b, err = base64.RawURLEncoding.DecodeString(segments[0])
 	if err != nil {
