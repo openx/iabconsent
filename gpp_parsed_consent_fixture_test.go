@@ -1,7 +1,7 @@
 package iabconsent_test
 
 import (
-	"github.com/LiveRamp/iabconsent"
+	"github.com/openx/iabconsent"
 )
 
 // Test fixtures can be created here: https://iabgpp.com/

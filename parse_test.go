@@ -6,7 +6,7 @@ import (
 
 	"github.com/go-check/check"
 
-	"github.com/LiveRamp/iabconsent"
+	"github.com/openx/iabconsent"
 )
 
 type ParseSuite struct{}
