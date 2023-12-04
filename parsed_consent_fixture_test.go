@@ -3,7 +3,7 @@ package iabconsent_test
 import (
 	"time"
 
-	"github.com/LiveRamp/iabconsent"
+	"github.com/openx/iabconsent"
 )
 
 type consentType int
