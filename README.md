@@ -158,7 +158,7 @@ func customParsers() *iabconsent.Options {
 			switch gppSectionID {
 			case 2:
 				return &TcfV2GppSectionParser{
-					iabconsent.GppSection{SectionId: gppSectionID, SectionValue: sectionString},
+					GppSectionParser{sectionId: gppSectionID, sectionValue: sectionString},
 				}
 			}
 
@@ -167,12 +167,21 @@ func customParsers() *iabconsent.Options {
 	}
 }
 
+type GppSectionParser struct {
+	sectionValue string
+	sectionId    int
+}
+
 type TcfV2GppSectionParser struct {
-	iabconsent.GppSection
+	GppSectionParser
+}
+
+func (p *GppSectionParser) GetSectionId() int {
+	return p.sectionId
 }
 
 func (p *TcfV2GppSectionParser) ParseConsent() (iabconsent.GppParsedConsent, error) {
-	tcfEuV2Parsed, err := iabconsent.ParseV2(p.SectionValue)
+	tcfEuV2Parsed, err := iabconsent.ParseV2(p.sectionValue)
 
 	if err != nil {
 		return nil, err
