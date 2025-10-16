@@ -73,5 +73,5 @@ var gppParsedConsentFixtures = map[string]map[int]*iabconsent.MspaParsedConsent{
 	// Valid GPP w/ US New Jersey MSPA, Subsection of GPC False.
 	"DBABAYA~BlWqqqmaqA": {iabconsent.UsNewJerseySID: mspaConsentFixtures[iabconsent.UsNewJerseySID]["BlWqqqmaqA"]},
 	// Valid GPP w/ US Tennessee MSPA, Subsection of GPC False.
-	"DBABQYA~Bqqqqqo": {iabconsent.UsTennesseeSID: mspaConsentFixtures[iabconsent.UsTennesseeSID]["Bqqqqqo"]},
+	"DBABQYA~BqqqqqqA": {iabconsent.UsTennesseeSID: mspaConsentFixtures[iabconsent.UsTennesseeSID]["BqqqqqqA"]},
 }
