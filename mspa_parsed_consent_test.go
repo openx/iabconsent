@@ -157,6 +157,56 @@ func (s *MspaSuite) TestParseMSPAError(c *check.C) {
 			key:  "usct",
 			sid:  iabconsent.UsConnecticutSID,
 		},
+		{
+			desc: "Florida",
+			key:  "usfl",
+			sid:  iabconsent.UsFloridaSID,
+		},
+		{
+			desc: "Montana",
+			key:  "usmt",
+			sid:  iabconsent.UsMontanaSID,
+		},
+		{
+			desc: "Oregon",
+			key:  "usor",
+			sid:  iabconsent.UsOregonSID,
+		},
+		{
+			desc: "Texas",
+			key:  "ustx",
+			sid:  iabconsent.UsTexasSID,
+		},
+		{
+			desc: "Delaware",
+			key:  "usde",
+			sid:  iabconsent.UsDelawareSID,
+		},
+		{
+			desc: "Iowa",
+			key:  "usia",
+			sid:  iabconsent.UsIowaSID,
+		},
+		{
+			desc: "Nebraska",
+			key:  "usne",
+			sid:  iabconsent.UsNebraskaSID,
+		},
+		{
+			desc: "New Hampshire",
+			key:  "usnh",
+			sid:  iabconsent.UsNewHampshireSID,
+		},
+		{
+			desc: "New Jersey",
+			key:  "usnj",
+			sid:  iabconsent.UsNewJerseySID,
+		},
+		{
+			desc: "Tennessee",
+			key:  "ustn",
+			sid:  iabconsent.UsTennesseeSID,
+		},
 	}
 	var tcs = []struct {
 		desc          string
@@ -166,12 +216,22 @@ func (s *MspaSuite) TestParseMSPAError(c *check.C) {
 		{
 			desc:          "Wrong Version.",
 			consentString: "DVVqAAEABA",
-			expected:      "non-v1 string passed.",
+			expected:      "unsupported version: 3",
 		},
 		{
 			desc:          "Bad Decoding.",
 			consentString: "$%&*(",
 			expected:      "parse %s consent string: illegal base64 data at input byte 0",
+		},
+		{
+			desc:          "Invalid Section Length. Too long for all v1 strings",
+			consentString: "BqqAqqqqqqqqAA",
+			expected:      "invalid consent string length for v1",
+		},
+		{
+			desc:          "Invalid Section Length. Too short for all v1 strings",
+			consentString: "BqqA",
+			expected:      "invalid consent string length for v1",
 		},
 	}
 	for _, s := range mspaTests {
