@@ -41,8 +41,8 @@ const (
 	MspaUsNhV1StringLength = 48
 	// MspaUsNjV1StringLength is 54 bits padded with 2 bits of 0s making valid length 56 bits
 	MspaUsNjV1StringLength = 56
-	// MspaUsTnV1StringLength is 40 bits with no padding making valid length 40 bits
-	MspaUsTnV1StringLength = 40
+	// MspaUsTnV1StringLength is 42 bits padded with 6 bits of 0s making valid length 48 bits
+	MspaUsTnV1StringLength = 48
 )
 
 type MspaUsNational struct {
@@ -955,6 +955,7 @@ func (m *MspaUsTN) ParseConsent() (GppParsedConsent, error) {
 	p.SensitiveDataProcessingConsents, _ = r.ReadMspaBitfieldConsent(8)
 	p.KnownChildSensitiveDataConsents, _ = r.ReadMspaBitfieldConsent(1)
 	p.PersonalDataConsents, _ = r.ReadMspaConsent()
+	p.MspaCoveredTransaction, _ = r.ReadMspaNaYesNo()
 	p.MspaOptOutOptionMode, _ = r.ReadMspaNaYesNo()
 	p.MspaServiceProviderMode, _ = r.ReadMspaNaYesNo()
 

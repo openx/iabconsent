@@ -1006,7 +1006,7 @@ var mspaConsentFixtures = map[int]map[string]*iabconsent.MspaParsedConsent{
 	// Tennessee
 	iabconsent.UsTennesseeSID: {
 		// ustn with subsection of GPC False
-		"Bqqqqqo": {
+		"BqqqqqqA": {
 			Version:                         1,
 			SharingNotice:                   iabconsent.NoticeNotProvided,
 			SaleOptOutNotice:                iabconsent.NoticeNotProvided,
@@ -1027,12 +1027,13 @@ var mspaConsentFixtures = map[int]map[string]*iabconsent.MspaParsedConsent{
 				0: iabconsent.Consent,
 			},
 			PersonalDataConsents:    iabconsent.Consent,
+			MspaCoveredTransaction:  iabconsent.MspaNo,
 			MspaOptOutOptionMode:    iabconsent.MspaNo,
 			MspaServiceProviderMode: iabconsent.MspaNo,
 			Gpc:                     false,
 		},
 		// ustn with subsection of GPC True
-		"Bqqqqqo.YA": {
+		"BqqqqqqA.YA": {
 			Version:                         1,
 			SharingNotice:                   iabconsent.NoticeNotProvided,
 			SaleOptOutNotice:                iabconsent.NoticeNotProvided,
@@ -1053,6 +1054,7 @@ var mspaConsentFixtures = map[int]map[string]*iabconsent.MspaParsedConsent{
 				0: iabconsent.Consent,
 			},
 			PersonalDataConsents:    iabconsent.Consent,
+			MspaCoveredTransaction:  iabconsent.MspaNo,
 			MspaOptOutOptionMode:    iabconsent.MspaNo,
 			MspaServiceProviderMode: iabconsent.MspaNo,
 			Gpc:                     true,
