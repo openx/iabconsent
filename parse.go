@@ -475,7 +475,7 @@ func ParseV2(s string) (*V2ParsedConsent, error) {
 		switch st {
 		case DisclosedVendors:
 			if p.OOBDisclosedVendors != nil {
-				return p, errors.New("multiple disclosed vendors segments passedg")
+				return p, errors.New("multiple disclosed vendors segments passed")
 			}
 			p.OOBDisclosedVendors, _ = r.ReadVendors(st)
 		case AllowedVendors:

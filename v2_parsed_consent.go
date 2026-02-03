@@ -354,6 +354,14 @@ func (p *V2ParsedConsent) MinorVersion() (int, error) {
 	// Any TCF v2 string that has TCFPolicyVersion of 4 indicates v2.2.
 	case 4:
 		return 2, nil
+	// TCFPolicyVersion remains 5 for v2.2, but we need to check for the presence of
+	// the OOB Disclosed Vendors section to determine if it's v2.2 or v2.3.
+	case 5:
+		if p.OOBDisclosedVendors == nil {
+			return 2, nil
+		} else {
+			return 3, nil
+		}
 	default:
 		return 100, errors.Errorf("Unsupported TCFPolicyVersion %d", p.TCFPolicyVersion)
 	}
