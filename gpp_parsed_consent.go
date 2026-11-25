@@ -132,9 +132,10 @@ func parseGppHeader(s string, maxSections int) (*GppHeader, error) {
 	if g.Version != 1 {
 		return nil, errors.New("unsupported gpp version " + fmt.Sprint(g.Version))
 	}
-	var sectionsErr error
-	if g.Sections, sectionsErr = r.readFibonacciRange(maxSections); sectionsErr == errFibonacciRangeTooLong {
-		return nil, sectionsErr
+	if g.Sections, err = r.readFibonacciRange(maxSections); err == errFibonacciRangeTooLong {
+		return nil, err
+	} else if err != nil {
+		return nil, errors.WithMessage(err, "parse gpp header sections")
 	}
 	return g, r.Err
 }

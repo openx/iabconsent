@@ -375,6 +375,13 @@ func (s *MspaSuite) TestParseMSPASectionWithHeaderError(c *check.C) {
 			expected:     "parse %s section header: read subsections: fibonacci int overflows int",
 		},
 		{
+			desc:          "Header subsection IDs overflow int.",
+			consentString: "%hAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAG.AQAA.AQAA.AQAA",
+			// Two offsets of F(92) each, whose sum wraps around to a negative int.
+			mutateHeader: func(h string) string { return h[:2] + "AC" },
+			expected:     "parse %s section header: read subsections: fibonacci int overflows int",
+		},
+		{
 			desc:          "Truncated header.",
 			consentString: "%h.AQAA",
 			// Missing the count of subsections, which padding must not supply.

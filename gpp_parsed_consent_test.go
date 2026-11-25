@@ -119,6 +119,30 @@ func (s *GppParseSuite) TestParseGppHeaderError(c *check.C) {
 			description: "Header shorter than Type, Version and the count of Sections, by a single character.",
 			header:      "DBA",
 			expected:    errors.New("parse gpp header consent string: header too short"),
+		},
+		{
+			description: "Section ID offset overflows int.",
+			// Fibonacci encoded offset F(90) + F(92) wraps around to a negative int.
+			header:   "DBABAAAAAAAAAAAAAABY",
+			expected: errors.New("parse gpp header sections: fibonacci int overflows int"),
+		},
+		{
+			description: "Group length overflows int.",
+			// Fibonacci encoded group length F(90) + F(92) wraps around to a negative int.
+			header:   "DBAB4AAAAAAAAAAAAAAW",
+			expected: errors.New("parse gpp header sections: fibonacci int overflows int"),
+		},
+		{
+			description: "Section IDs overflow int.",
+			// Two offsets of F(92) each, whose sum wraps around to a negative int.
+			header:   "DBACAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAD",
+			expected: errors.New("parse gpp header sections: fibonacci int overflows int"),
+		},
+		{
+			description: "Last section ID of a group overflows int.",
+			// Offset and group length of F(92) each, whose sum wraps around to a negative int.
+			header:   "DBABgAAAAAAAAAAAAAAYAAAAAAAAAAAAAAG",
+			expected: errors.New("parse gpp header sections: fibonacci int overflows int"),
 		}}
 
 	for _, tc := range tcs {
@@ -179,13 +203,19 @@ func (s *MspaSuite) TestMapGppSectionToParserErrors(c *check.C) {
 			desc: "Header group length overflows int.",
 			// Fibonacci encoded group length F(90) + F(92) wraps around to a negative int.
 			gpp:      "DBAB4AAAAAAAAAAAAAAW~section1",
-			expected: errors.New("mismatch number of sections"),
+			expected: errors.New("read gpp header: parse gpp header sections: fibonacci int overflows int"),
 		},
 		{
 			desc: "Header section ID offset overflows int.",
 			// Fibonacci encoded offset F(90) + F(92) wraps around to a negative int.
 			gpp:      "DBABAAAAAAAAAAAAAABY~section1",
-			expected: errors.New("mismatch number of sections"),
+			expected: errors.New("read gpp header: parse gpp header sections: fibonacci int overflows int"),
+		},
+		{
+			desc: "Header section IDs overflow int.",
+			// Two offsets of F(92) each, whose sum wraps around to a negative int.
+			gpp:      "DBACAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAD~section1~section2",
+			expected: errors.New("read gpp header: parse gpp header sections: fibonacci int overflows int"),
 		},
 		{
 			desc:     "Truncated header.",
