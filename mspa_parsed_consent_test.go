@@ -253,6 +253,48 @@ func (s *MspaSuite) TestParseMSPAError(c *check.C) {
 	}
 }
 
+// Segments may be padded to a multiple of 6 bits (GPP spec) or to a whole byte (iabgpp encoders),
+// but must be neither truncated nor longer.
+func (s *MspaSuite) TestParseMSPASixBitPaddingLengthErrors(c *check.C) {
+	var tcs = []struct {
+		desc          string
+		sid           int
+		consentString string
+		expected      string
+	}{
+		{
+			desc:          "Minnesota core shorter than 42 bits.",
+			sid:           iabconsent.UsMinnesotaSID,
+			consentString: "BVWSSV",
+			expected:      "invalid consent string length for v1",
+		},
+		{
+			desc:          "Minnesota core longer than 42 bits padded to a whole byte.",
+			sid:           iabconsent.UsMinnesotaSID,
+			consentString: "BVWSSVWAA",
+			expected:      "invalid consent string length for v1",
+		},
+		{
+			desc:          "Maryland core shorter than 22 bits.",
+			sid:           iabconsent.UsMarylandSID,
+			consentString: "YBAA.AQA",
+			expected:      "parse usmd consent string: invalid consent string length for v1",
+		},
+		{
+			desc:          "Indiana sensitive data consents subsection shorter than 16 bits.",
+			sid:           iabconsent.UsIndianaSID,
+			consentString: "ZBABYA.BVVV.kk",
+			expected:      "parse usin subsection 1: invalid sensitive data consents subsection length",
+		},
+	}
+	for _, t := range tcs {
+		c.Log(t.desc)
+
+		var _, err = iabconsent.NewMspa(t.sid, t.consentString).ParseConsent()
+		c.Check(err, check.ErrorMatches, t.expected)
+	}
+}
+
 func (s *MspaSuite) TestParseMSPASectionWithHeaderError(c *check.C) {
 	var mspaTests = []struct {
 		desc   string
@@ -442,8 +484,46 @@ func (s *MspaSuite) TestParseMSPASectionWithHeaderUnsupportedSubsection(c *check
 	var p, err = iabconsent.NewMspa(iabconsent.UsIndianaSID, "ZBABMA.BVVV.$%&").ParseConsent()
 	c.Assert(err, check.IsNil)
 	var mspa = p.(*iabconsent.MspaParsedConsent)
-	c.Check(mspa.SensitiveDataProcessingConsents, check.IsNil)
+	// The Sensitive Data Consents subsection is absent, so its fields have the default values.
+	c.Check(mspa.SensitiveDataProcessingConsents, check.DeepEquals, notApplicableSensitiveDataConsents())
 	c.Check(mspa.Gpc, check.Equals, false)
+}
+
+func notApplicableSensitiveDataConsents() map[int]iabconsent.MspaConsent {
+	var m = make(map[int]iabconsent.MspaConsent, 8)
+	for i := 0; i < 8; i++ {
+		m[i] = iabconsent.ConsentNotApplicable
+	}
+	return m
+}
+
+// If the Sensitive Data Consents subsection is absent, its fields default to ConsentNotApplicable,
+// like in iabgpp-java. Each parsed consent gets its own map, so modifying one does not affect others.
+func (s *MspaSuite) TestParseMSPASectionWithHeaderSensitiveDataConsentsDefault(c *check.C) {
+	for _, sid := range []int{iabconsent.UsIndianaSID, iabconsent.UsKentuckySID, iabconsent.UsRhodeIslandSID} {
+		c.Log(sid)
+		var header = map[int]string{
+			iabconsent.UsIndianaSID:     "ZBAA",
+			iabconsent.UsKentuckySID:    "aBAA",
+			iabconsent.UsRhodeIslandSID: "bBAA",
+		}[sid]
+
+		var first, err = iabconsent.NewMspa(sid, header+".AQAA").ParseConsent()
+		c.Assert(err, check.IsNil)
+		var firstMspa = first.(*iabconsent.MspaParsedConsent)
+		c.Check(firstMspa.SensitiveDataProcessingConsents, check.DeepEquals, notApplicableSensitiveDataConsents())
+		firstMspa.SensitiveDataProcessingConsents[0] = iabconsent.Consent
+
+		var second iabconsent.GppParsedConsent
+		second, err = iabconsent.NewMspa(sid, header+".AQAA").ParseConsent()
+		c.Assert(err, check.IsNil)
+		c.Check(second.(*iabconsent.MspaParsedConsent).SensitiveDataProcessingConsents, check.DeepEquals,
+			notApplicableSensitiveDataConsents())
+	}
+	// US Maryland has no Sensitive Data Consents.
+	var p, err = iabconsent.NewMspa(iabconsent.UsMarylandSID, "YBAA.AQAA").ParseConsent()
+	c.Assert(err, check.IsNil)
+	c.Check(p.(*iabconsent.MspaParsedConsent).SensitiveDataProcessingConsents, check.IsNil)
 }
 
 func (s *MspaSuite) TestParseMSPAMspaMode(c *check.C) {
