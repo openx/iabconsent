@@ -170,6 +170,24 @@ func (s *MspaSuite) TestMapGppSectionToParserErrors(c *check.C) {
 			expected: errors.New("mismatch number of sections"),
 		},
 		{
+			desc: "Header lists a group of MaxInt64 + 1 sections.",
+			// The group length must not overflow the check against the sections passed.
+			gpp:      "DBAB6oQlKJFQKQKIiAVG~section1",
+			expected: errors.New("mismatch number of sections"),
+		},
+		{
+			desc: "Header group length overflows int.",
+			// Fibonacci encoded group length F(90) + F(92) wraps around to a negative int.
+			gpp:      "DBAB4AAAAAAAAAAAAAAW~section1",
+			expected: errors.New("mismatch number of sections"),
+		},
+		{
+			desc: "Header section ID offset overflows int.",
+			// Fibonacci encoded offset F(90) + F(92) wraps around to a negative int.
+			gpp:      "DBABAAAAAAAAAAAAAABY~section1",
+			expected: errors.New("mismatch number of sections"),
+		},
+		{
 			desc:     "Truncated header.",
 			gpp:      "DB~section1",
 			expected: errors.New("read gpp header: parse gpp header consent string: header too short"),

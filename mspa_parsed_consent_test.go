@@ -355,10 +355,24 @@ func (s *MspaSuite) TestParseMSPASectionWithHeaderError(c *check.C) {
 		},
 		{
 			desc:          "Header lists more subsections than passed.",
-			consentString: "%hB8oogqhIW.AQAA",
+			consentString: "%h8oogqhIW.AQAA.AQAA",
 			// Single range of 10^9 subsections, which must be rejected before it is expanded.
 			mutateHeader: func(h string) string { return h[:2] + "AB" },
-			expected:     "parse %s section header: mismatch number of subsections: header lists more than the 0 found",
+			expected:     "parse %s section header: mismatch number of subsections: header lists more than the 1 found",
+		},
+		{
+			desc:          "Header lists a group of MaxInt64 + 1 subsections.",
+			consentString: "%h6oQlKJFQKQKIiAVG.AQAA.AQAA",
+			// The group length must not overflow the check against the subsections passed.
+			mutateHeader: func(h string) string { return h[:2] + "AB" },
+			expected:     "parse %s section header: mismatch number of subsections: header lists more than the 1 found",
+		},
+		{
+			desc:          "Header group length overflows int.",
+			consentString: "%h4AAAAAAAAAAAAAAW.AQAA.AQAA",
+			// Fibonacci encoded group length F(90) + F(92) wraps around to a negative int.
+			mutateHeader: func(h string) string { return h[:2] + "AB" },
+			expected:     "parse %s section header: read subsections: fibonacci int overflows int",
 		},
 		{
 			desc:          "Truncated header.",

@@ -195,6 +195,9 @@ func (r *ConsentReader) ReadFibonacciRange() ([]int, error) {
 // errFibonacciRangeTooLong is returned by readFibonacciRange when the range lists more IDs than allowed.
 var errFibonacciRangeTooLong = errors.New("fibonacci range lists too many ids")
 
+// errFibonacciIntOverflow is returned by readFibonacciRange when a Fibonacci encoded integer overflows int.
+var errFibonacciIntOverflow = errors.New("fibonacci int overflows int")
+
 // readFibonacciRange reads a range of Fibonacci encoded integers like ReadFibonacciRange, but returns
 // errFibonacciRangeTooLong as soon as the range lists more than maxIds IDs, so that a short malformed
 // range cannot expand into a huge slice. A negative maxIds means no limit.
@@ -226,14 +229,22 @@ func (r *ConsentReader) readFibonacciRange(maxIds int) ([]int, error) {
 		if offset, err = r.ReadFibonacciInt(); err != nil {
 			return nil, errors.WithMessage(err, "fibonacci range offset")
 		}
+		// A negative value means the Fibonacci encoded integer overflowed int.
+		if offset < 0 {
+			return nil, errFibonacciIntOverflow
+		}
 		if isRange {
 			// If a range, we need to get group length to add multiple values to the range.
 			var groupLength int
 			if groupLength, err = r.ReadFibonacciInt(); err != nil {
 				return nil, errors.WithMessage(err, "fibonacci range length")
 			}
-			// A group lists groupLength + 1 IDs.
-			if maxIds >= 0 && len(ret)+groupLength+1 > maxIds {
+			if groupLength < 0 {
+				return nil, errFibonacciIntOverflow
+			}
+			// A group lists groupLength + 1 IDs. Compare against the remaining capacity, as
+			// len(ret)+groupLength+1 overflows int for a huge groupLength.
+			if maxIds >= 0 && groupLength >= maxIds-len(ret) {
 				return nil, errFibonacciRangeTooLong
 			}
 			// Add offset to last seen value as starting point of range.
