@@ -216,8 +216,9 @@ func ParseGppSubSections(subSections []string) (*GppSubSection, error) {
 	var gppSub = new(GppSubSection)
 	// There could be >1 subsection, but we will only return a single GppSubSection result.
 	for _, s := range subSections {
-		// Actual base64 encoded data, so no need to add extra `0`s.
-		var b, err = base64.RawURLEncoding.DecodeString(s)
+		// Keep all 6 bits of each character, so that a GPC subsection padded only to 6 bits
+		// (e.g. a single character `Y`), as allowed by the GPP spec, can be read.
+		var b, err = decodeGppSegment(s)
 		if err != nil {
 			return nil, errors.Wrap(err, "parse gpp subsection string")
 		}

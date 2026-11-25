@@ -76,6 +76,8 @@ var gppParsedConsentFixtures = map[string]map[int]*iabconsent.MspaParsedConsent{
 	"DBABQYA~BqqqqqqA": {iabconsent.UsTennesseeSID: mspaConsentFixtures[iabconsent.UsTennesseeSID]["BqqqqqqA"]},
 	// Valid GPP w/ US Minnesota MSPA, Subsection of GPC True.
 	"DBABIYA~BVWSSVWA.YA": {iabconsent.UsMinnesotaSID: mspaConsentFixtures[iabconsent.UsMinnesotaSID]["BVWSSVWA.YA"]},
+	// Valid GPP w/ US Minnesota MSPA padded only to a multiple of 6 bits, single character Subsection of GPC True.
+	"DBABIYA~BVWSSVW.Y": {iabconsent.UsMinnesotaSID: mspaConsentFixtures[iabconsent.UsMinnesotaSID]["BVWSSVW.Y"]},
 	// Valid GPP w/ US Maryland MSPA, Subsection of GPC True.
 	"DBABEYA~YBABYA.BVVU.YA": {iabconsent.UsMarylandSID: mspaConsentFixtures[iabconsent.UsMarylandSID]["YBABYA.BVVU.YA"]},
 	// Valid GPP w/ US Indiana MSPA, Sensitive Data Consents subsection.
