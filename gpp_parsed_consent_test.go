@@ -109,6 +109,16 @@ func (s *GppParseSuite) TestParseGppHeaderError(c *check.C) {
 			// Six bit groupings: 000011 000010 000000 000010 001101 011000
 			header:   "DCACNY",
 			expected: errors.New("unsupported gpp version 2"),
+		},
+		{
+			description: "Header shorter than Type, Version and the count of Sections.",
+			header:      "DB",
+			expected:    errors.New("parse gpp header consent string: header too short"),
+		},
+		{
+			description: "Header shorter than Type, Version and the count of Sections, by a single character.",
+			header:      "DBA",
+			expected:    errors.New("parse gpp header consent string: header too short"),
 		}}
 
 	for _, tc := range tcs {
@@ -152,6 +162,17 @@ func (s *MspaSuite) TestMapGppSectionToParserErrors(c *check.C) {
 			desc:     "Mismatched # of sections, header expects 1.",
 			gpp:      "DBABL~section1~section2",
 			expected: errors.New("mismatch number of sections"),
+		},
+		{
+			desc: "Header lists more sections than passed.",
+			// Single range of 10^9 sections, which must be rejected before it is expanded.
+			gpp:      "DBAB8oogqhIW~section1",
+			expected: errors.New("mismatch number of sections"),
+		},
+		{
+			desc:     "Truncated header.",
+			gpp:      "DB~section1",
+			expected: errors.New("read gpp header: parse gpp header consent string: header too short"),
 		},
 		{
 			desc:     "Bad header.",

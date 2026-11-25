@@ -189,11 +189,25 @@ func (r *ConsentReader) ReadRangeEntries(n uint) ([]*RangeEntry, error) {
 // - (per item) int(Fibonacci) - representing a) the offset to a single ID or b) the offset to the start ID in case of a group (the offset is from the last seen number, or 0 for the first entry)
 // - (per item + only if group) int(Fibonacci) - length of the group
 func (r *ConsentReader) ReadFibonacciRange() ([]int, error) {
+	return r.readFibonacciRange(-1)
+}
+
+// errFibonacciRangeTooLong is returned by readFibonacciRange when the range lists more IDs than allowed.
+var errFibonacciRangeTooLong = errors.New("fibonacci range lists too many ids")
+
+// readFibonacciRange reads a range of Fibonacci encoded integers like ReadFibonacciRange, but returns
+// errFibonacciRangeTooLong as soon as the range lists more than maxIds IDs, so that a short malformed
+// range cannot expand into a huge slice. A negative maxIds means no limit.
+func (r *ConsentReader) readFibonacciRange(maxIds int) ([]int, error) {
 	var length int
 	var err error
 	// Get the amount of items to follow
 	if length, err = r.ReadInt(12); err != nil {
 		return nil, errors.WithMessage(err, "fibonacci length check")
+	}
+	// Each item lists at least one ID.
+	if maxIds >= 0 && length > maxIds {
+		return nil, errFibonacciRangeTooLong
 	}
 	var ret []int
 	for i := uint(0); i < uint(length); i++ {
@@ -218,6 +232,10 @@ func (r *ConsentReader) ReadFibonacciRange() ([]int, error) {
 			if groupLength, err = r.ReadFibonacciInt(); err != nil {
 				return nil, errors.WithMessage(err, "fibonacci range length")
 			}
+			// A group lists groupLength + 1 IDs.
+			if maxIds >= 0 && len(ret)+groupLength+1 > maxIds {
+				return nil, errFibonacciRangeTooLong
+			}
 			// Add offset to last seen value as starting point of range.
 			lastSeen += offset
 			// Keep appending integers until we reach the group length.
@@ -226,6 +244,9 @@ func (r *ConsentReader) ReadFibonacciRange() ([]int, error) {
 				lastSeen++
 			}
 		} else {
+			if maxIds >= 0 && len(ret)+1 > maxIds {
+				return nil, errFibonacciRangeTooLong
+			}
 			// If a single ID, add value to last seen value.
 			ret = append(ret, lastSeen+offset)
 		}

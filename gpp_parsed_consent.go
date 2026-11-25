@@ -99,6 +99,20 @@ const (
 // Version	Int(6)	Version of the GPP spec (version 1, as of Jan. 2023)
 // Sections	Range(Fibonacci)	List of Section IDs that are contained in the GPP string.
 func ParseGppHeader(s string) (*GppHeader, error) {
+	return parseGppHeader(s, -1)
+}
+
+// gppHeaderMinLength is the minimal length, in base64 characters, of a GPP header or a section header:
+// Type/SectionID Int(6) + Version Int(6) + the Int(12) count of the Fibonacci range = 24 bits.
+// It stops padding from supplying the missing fields of a truncated header.
+const gppHeaderMinLength = 4
+
+// parseGppHeader parses a GPP header like ParseGppHeader, but returns errFibonacciRangeTooLong
+// if the header lists more than maxSections sections. A negative maxSections means no limit.
+func parseGppHeader(s string, maxSections int) (*GppHeader, error) {
+	if len(s) < gppHeaderMinLength {
+		return nil, errors.New("parse gpp header consent string: header too short")
+	}
 	// IAB's base64 conversion means a 6 bit grouped value can be converted to 8 bit bytes.
 	// Any leftover bits <8 would be skipped in normal base64 decoding.
 	// Therefore, pad with `A`s (6 '0's each) to ensure that all bits are decoded into bytes.
@@ -118,7 +132,10 @@ func ParseGppHeader(s string) (*GppHeader, error) {
 	if g.Version != 1 {
 		return nil, errors.New("unsupported gpp version " + fmt.Sprint(g.Version))
 	}
-	g.Sections, _ = r.ReadFibonacciRange()
+	var sectionsErr error
+	if g.Sections, sectionsErr = r.readFibonacciRange(maxSections); sectionsErr == errFibonacciRangeTooLong {
+		return nil, sectionsErr
+	}
 	return g, r.Err
 }
 
@@ -145,8 +162,12 @@ func MapGppSectionToParser(s string, options ...*Options) ([]GppSectionParser, e
 		return nil, errors.New("not enough gpp segments")
 	}
 
-	gppHeader, err = ParseGppHeader(segments[0])
-	if err != nil {
+	// Sections listed in the header are limited to the sections passed, so that a malformed header
+	// cannot expand into a huge list of section IDs.
+	gppHeader, err = parseGppHeader(segments[0], len(segments)-1)
+	if err == errFibonacciRangeTooLong {
+		return nil, errors.New("mismatch number of sections")
+	} else if err != nil {
 		return nil, errors.Wrap(err, "read gpp header")
 	} else if len(segments[1:]) != len(gppHeader.Sections) {
 		// Return early if sections in header do not match sections passed.

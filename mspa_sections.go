@@ -1092,7 +1092,11 @@ type mspaSectionHeader struct {
 }
 
 // parseMspaSectionHeader parses the section header of sections which encode their own section header.
-func parseMspaSectionHeader(s string) (*mspaSectionHeader, error) {
+// It returns errFibonacciRangeTooLong if the header lists more than maxSubSections subsections.
+func parseMspaSectionHeader(s string, maxSubSections int) (*mspaSectionHeader, error) {
+	if len(s) < gppHeaderMinLength {
+		return nil, errors.New("header too short")
+	}
 	var b, err = decodeGppSegment(s)
 	if err != nil {
 		return nil, errors.Wrap(err, "decode section header")
@@ -1105,7 +1109,7 @@ func parseMspaSectionHeader(s string) (*mspaSectionHeader, error) {
 	if h.Version, err = r.ReadInt(6); err != nil {
 		return nil, errors.WithMessage(err, "read version")
 	}
-	if h.SubSections, err = r.ReadFibonacciRange(); err != nil {
+	if h.SubSections, err = r.readFibonacciRange(maxSubSections); err != nil {
 		return nil, errors.WithMessage(err, "read subsections")
 	}
 	return h, nil
@@ -1121,8 +1125,13 @@ func splitMspaSectionWithHeader(sid int, key string, sectionValue string) (*mspa
 		return nil, nil, errors.Errorf("parse %s consent string: missing core subsection", key)
 	}
 
-	var header, err = parseMspaSectionHeader(segments[0])
-	if err != nil {
+	// Subsections listed in the header are limited to the segments passed after the core subsection,
+	// so that a malformed header cannot expand into a huge list of subsection IDs.
+	var header, err = parseMspaSectionHeader(segments[0], len(segments)-2)
+	if errors.Cause(err) == errFibonacciRangeTooLong {
+		return nil, nil, errors.Errorf("parse %s section header: mismatch number of subsections: header lists more than the %d found",
+			key, len(segments)-2)
+	} else if err != nil {
 		return nil, nil, errors.Wrapf(err, "parse %s section header", key)
 	}
 	if header.SectionId != sid {

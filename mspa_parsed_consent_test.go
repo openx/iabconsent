@@ -309,7 +309,21 @@ func (s *MspaSuite) TestParseMSPASectionWithHeaderError(c *check.C) {
 			consentString: "%hBYA.AQAA",
 			// Header with a single subsection: drop the empty subsections range.
 			mutateHeader: func(h string) string { return h[:3] },
-			expected:     "parse %s section header: mismatch number of subsections: header lists 1, found 0",
+			expected:     "parse %s section header: mismatch number of subsections: header lists more than the 0 found",
+		},
+		{
+			desc:          "Header lists more subsections than passed.",
+			consentString: "%hB8oogqhIW.AQAA",
+			// Single range of 10^9 subsections, which must be rejected before it is expanded.
+			mutateHeader: func(h string) string { return h[:2] + "AB" },
+			expected:     "parse %s section header: mismatch number of subsections: header lists more than the 0 found",
+		},
+		{
+			desc:          "Truncated header.",
+			consentString: "%h.AQAA",
+			// Missing the count of subsections, which padding must not supply.
+			mutateHeader: func(h string) string { return h[:2] },
+			expected:     "parse %s section header: header too short",
 		},
 		{
 			desc:          "Segment not listed in header.",
