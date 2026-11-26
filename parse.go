@@ -17,6 +17,10 @@ const (
 	nsPerDs = int64(time.Millisecond * 100)
 )
 
+// maxFibonacciRangeIds is the default limit of IDs read from a Fibonacci range by the public functions.
+// It matches the maximal number of items of the Int(12) count; GPP section and subsection IDs are far fewer.
+const maxFibonacciRangeIds = 4095
+
 var PrecompiledFibonacci = map[int]int{0: 0, 1: 1, 2: 1, 3: 2, 4: 3, 5: 5, 6: 8, 7: 13, 8: 21, 9: 34, 10: 55, 11: 89, 12: 144, 13: 233}
 
 // ConsentReader provides additional Consent String-specific bit-reading
@@ -188,8 +192,10 @@ func (r *ConsentReader) ReadRangeEntries(n uint) ([]*RangeEntry, error) {
 // - (per item) Boolean - representing whether the item is a single ID (0/false) or a group of IDs (1/true)
 // - (per item) int(Fibonacci) - representing a) the offset to a single ID or b) the offset to the start ID in case of a group (the offset is from the last seen number, or 0 for the first entry)
 // - (per item + only if group) int(Fibonacci) - length of the group
+// At most maxFibonacciRangeIds IDs are read; a longer range returns an error, so that a short
+// malformed range cannot expand into a huge slice.
 func (r *ConsentReader) ReadFibonacciRange() ([]int, error) {
-	return r.readFibonacciRange(-1)
+	return r.readFibonacciRange(maxFibonacciRangeIds)
 }
 
 // errFibonacciRangeTooLong is returned by readFibonacciRange when the range lists more IDs than allowed.
@@ -380,7 +386,7 @@ func (r *ConsentReader) ReadPublisherTCEntry() (*PublisherTCEntry, error) {
 //
 // Example Usage:
 //
-//   var pc, err = iabconsent.Parse("BONJ5bvONJ5bvAMAPyFRAL7AAAAMhuqKklS-gAAAAAAAAAAAAAAAAAAAAAAAAAA")
+//	var pc, err = iabconsent.Parse("BONJ5bvONJ5bvAMAPyFRAL7AAAAMhuqKklS-gAAAAAAAAAAAAAAAAAAAAAAAAAA")
 //
 // Deprecated: Use ParseV1 to parse V1 consent strings.
 func Parse(s string) (*ParsedConsent, error) {
@@ -393,7 +399,7 @@ func Parse(s string) (*ParsedConsent, error) {
 //
 // Example Usage:
 //
-//   var pc, err = iabconsent.ParseV1("BONJ5bvONJ5bvAMAPyFRAL7AAAAMhuqKklS-gAAAAAAAAAAAAAAAAAAAAAAAAAA")
+//	var pc, err = iabconsent.ParseV1("BONJ5bvONJ5bvAMAPyFRAL7AAAAMhuqKklS-gAAAAAAAAAAAAAAAAAAAAAAAAAA")
 func ParseV1(s string) (*ParsedConsent, error) {
 	var b, err = base64.RawURLEncoding.DecodeString(s)
 	if err != nil {
@@ -436,7 +442,7 @@ func ParseV1(s string) (*ParsedConsent, error) {
 //
 // Example Usage:
 //
-//   var pc, err = iabconsent.ParseV2("COvzTO5OvzTO5BRAAAENAPCoALIAADgAAAAAAewAwABAAlAB6ABBFAAA")
+//	var pc, err = iabconsent.ParseV2("COvzTO5OvzTO5BRAAAENAPCoALIAADgAAAAAAewAwABAAlAB6ABBFAAA")
 func ParseV2(s string) (*V2ParsedConsent, error) {
 	var segments = strings.Split(s, ".")
 

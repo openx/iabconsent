@@ -98,8 +98,9 @@ const (
 // Type	    Int(6)	Fixed to 3 as “GPP Header field”
 // Version	Int(6)	Version of the GPP spec (version 1, as of Jan. 2023)
 // Sections	Range(Fibonacci)	List of Section IDs that are contained in the GPP string.
+// At most maxFibonacciRangeIds sections are read; a header listing more returns an error.
 func ParseGppHeader(s string) (*GppHeader, error) {
-	return parseGppHeader(s, -1)
+	return parseGppHeader(s, maxFibonacciRangeIds)
 }
 
 // gppHeaderMinLength is the minimal length, in base64 characters, of a GPP header or a section header:
@@ -132,7 +133,7 @@ func parseGppHeader(s string, maxSections int) (*GppHeader, error) {
 	if g.Version != 1 {
 		return nil, errors.New("unsupported gpp version " + fmt.Sprint(g.Version))
 	}
-	if g.Sections, err = r.readFibonacciRange(maxSections); err == errFibonacciRangeTooLong {
+	if g.Sections, err = r.readFibonacciRange(maxSections); errors.Cause(err) == errFibonacciRangeTooLong {
 		return nil, err
 	} else if err != nil {
 		return nil, errors.WithMessage(err, "parse gpp header sections")
@@ -166,7 +167,7 @@ func MapGppSectionToParser(s string, options ...*Options) ([]GppSectionParser, e
 	// Sections listed in the header are limited to the sections passed, so that a malformed header
 	// cannot expand into a huge list of section IDs.
 	gppHeader, err = parseGppHeader(segments[0], len(segments)-1)
-	if err == errFibonacciRangeTooLong {
+	if errors.Cause(err) == errFibonacciRangeTooLong {
 		return nil, errors.New("mismatch number of sections")
 	} else if err != nil {
 		return nil, errors.Wrap(err, "read gpp header")

@@ -1186,14 +1186,14 @@ func parseMspaGpcSubSection(p *MspaParsedConsent, subSection string) error {
 // with the given number of 2 bit consent fields.
 func newMspaSensitiveDataConsentsSubSectionParser(fields uint) mspaSubSectionParser {
 	return func(p *MspaParsedConsent, subSection string) error {
+		if !isGppBitFieldLength(subSection, int(fields)*2) {
+			return errors.New("invalid sensitive data consents subsection length")
+		}
 		var b, err = decodeGppSegment(subSection)
 		if err != nil {
 			return errors.Wrap(err, "parse sensitive data consents subsection")
 		}
 		var r = NewConsentReader(b)
-		if !isGppBitFieldLength(subSection, int(fields)*2) {
-			return errors.New("invalid sensitive data consents subsection length")
-		}
 		p.SensitiveDataProcessingConsents, err = r.ReadMspaBitfieldConsent(fields)
 		return err
 	}
@@ -1273,6 +1273,11 @@ func (s *mspaSectionWithHeader) parse(sid int, sectionValue string) (GppParsedCo
 		return nil, errors.Errorf("parse %s consent string: unsupported version: %d", s.key, header.Version)
 	}
 
+	// validate the length of the core subsection for v1
+	if !isGppBitFieldLength(segments[1], s.coreBits) {
+		return nil, errors.Errorf("parse %s consent string: invalid consent string length for v1", s.key)
+	}
+
 	var b []byte
 	b, err = decodeGppSegment(segments[1])
 	if err != nil {
@@ -1280,11 +1285,6 @@ func (s *mspaSectionWithHeader) parse(sid int, sectionValue string) (GppParsedCo
 	}
 
 	var r = NewConsentReader(b)
-
-	// validate the length of the core subsection for v1
-	if !isGppBitFieldLength(segments[1], s.coreBits) {
-		return nil, errors.Errorf("parse %s consent string: invalid consent string length for v1", s.key)
-	}
 
 	// This block of code directly describes the format of the core subsection.
 	var p = &MspaParsedConsent{Version: header.Version}

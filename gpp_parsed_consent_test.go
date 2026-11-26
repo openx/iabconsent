@@ -133,6 +133,12 @@ func (s *GppParseSuite) TestParseGppHeaderError(c *check.C) {
 			expected: errors.New("parse gpp header sections: fibonacci int overflows int"),
 		},
 		{
+			description: "Group lists more sections than the default limit.",
+			// A single group starting at 1 with a group length of F(19) = 4181, i.e. 4182 section IDs.
+			header:   "DBAB4AAM",
+			expected: errors.New("fibonacci range lists too many ids"),
+		},
+		{
 			description: "Section IDs overflow int.",
 			// Two offsets of F(92) each, whose sum wraps around to a negative int.
 			header:   "DBACAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAD",
@@ -140,8 +146,8 @@ func (s *GppParseSuite) TestParseGppHeaderError(c *check.C) {
 		},
 		{
 			description: "Last section ID of a group overflows int.",
-			// Offset and group length of F(92) each, whose sum wraps around to a negative int.
-			header:   "DBABgAAAAAAAAAAAAAAYAAAAAAAAAAAAAAG",
+			// Offset of max int and a group length of 20, whose sum wraps around to a negative int.
+			header:   "DBABqhCUokVApAoiIBUas",
 			expected: errors.New("parse gpp header sections: fibonacci int overflows int"),
 		}}
 
