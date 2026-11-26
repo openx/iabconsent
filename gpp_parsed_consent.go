@@ -25,6 +25,11 @@ const (
 	UsNewHampshireSID
 	UsNewJerseySID
 	UsTennesseeSID
+	UsMinnesotaSID
+	UsMarylandSID
+	UsIndianaSID
+	UsKentuckySID
+	UsRhodeIslandSID
 )
 
 // GppHeader is the first section of a GPP Consent String.
@@ -93,11 +98,26 @@ const (
 // Type	    Int(6)	Fixed to 3 as “GPP Header field”
 // Version	Int(6)	Version of the GPP spec (version 1, as of Jan. 2023)
 // Sections	Range(Fibonacci)	List of Section IDs that are contained in the GPP string.
+// At most maxFibonacciRangeIds sections are read; a header listing more returns an error.
 func ParseGppHeader(s string) (*GppHeader, error) {
+	return parseGppHeader(s, maxFibonacciRangeIds)
+}
+
+// gppHeaderMinLength is the minimal length, in base64 characters, of a GPP header or a section header:
+// Type/SectionID Int(6) + Version Int(6) + the Int(12) count of the Fibonacci range = 24 bits.
+// It stops padding from supplying the missing fields of a truncated header.
+const gppHeaderMinLength = 4
+
+// parseGppHeader parses a GPP header like ParseGppHeader, but returns errFibonacciRangeTooLong
+// if the header lists more than maxSections sections. A negative maxSections means no limit.
+func parseGppHeader(s string, maxSections int) (*GppHeader, error) {
+	if len(s) < gppHeaderMinLength {
+		return nil, errors.New("parse gpp header consent string: header too short")
+	}
 	// IAB's base64 conversion means a 6 bit grouped value can be converted to 8 bit bytes.
 	// Any leftover bits <8 would be skipped in normal base64 decoding.
-	// Therefore, pad with 6 '0's w/ `A` to ensure that all bits are decoded into bytes.
-	var b, err = base64.RawURLEncoding.DecodeString(s + "A")
+	// Therefore, pad with `A`s (6 '0's each) to ensure that all bits are decoded into bytes.
+	var b, err = decodeGppSegment(s)
 	if err != nil {
 		return nil, errors.Wrap(err, "parse gpp header consent string")
 	}
@@ -113,8 +133,21 @@ func ParseGppHeader(s string) (*GppHeader, error) {
 	if g.Version != 1 {
 		return nil, errors.New("unsupported gpp version " + fmt.Sprint(g.Version))
 	}
-	g.Sections, _ = r.ReadFibonacciRange()
+	if g.Sections, err = r.readFibonacciRange(maxSections); errors.Cause(err) == errFibonacciRangeTooLong {
+		return nil, err
+	} else if err != nil {
+		return nil, errors.WithMessage(err, "parse gpp header sections")
+	}
 	return g, r.Err
+}
+
+// decodeGppSegment decodes a single base64 Raw URL Encoded GPP segment, padding it with `A` (6 bits of 0s)
+// to a multiple of 4 characters, so that no trailing bits are dropped by base64 decoding.
+func decodeGppSegment(s string) ([]byte, error) {
+	if rem := len(s) % 4; rem != 0 {
+		s += strings.Repeat("A", 4-rem)
+	}
+	return base64.RawURLEncoding.DecodeString(s)
 }
 
 // MapGppSectionToParser takes a base64 Raw URL Encoded string which represents a GPP v1 string
@@ -131,8 +164,12 @@ func MapGppSectionToParser(s string, options ...*Options) ([]GppSectionParser, e
 		return nil, errors.New("not enough gpp segments")
 	}
 
-	gppHeader, err = ParseGppHeader(segments[0])
-	if err != nil {
+	// Sections listed in the header are limited to the sections passed, so that a malformed header
+	// cannot expand into a huge list of section IDs.
+	gppHeader, err = parseGppHeader(segments[0], len(segments)-1)
+	if errors.Cause(err) == errFibonacciRangeTooLong {
+		return nil, errors.New("mismatch number of sections")
+	} else if err != nil {
 		return nil, errors.Wrap(err, "read gpp header")
 	} else if len(segments[1:]) != len(gppHeader.Sections) {
 		// Return early if sections in header do not match sections passed.
@@ -181,8 +218,9 @@ func ParseGppSubSections(subSections []string) (*GppSubSection, error) {
 	var gppSub = new(GppSubSection)
 	// There could be >1 subsection, but we will only return a single GppSubSection result.
 	for _, s := range subSections {
-		// Actual base64 encoded data, so no need to add extra `0`s.
-		var b, err = base64.RawURLEncoding.DecodeString(s)
+		// Keep all 6 bits of each character, so that a GPC subsection padded only to 6 bits
+		// (e.g. a single character `Y`), as allowed by the GPP spec, can be read.
+		var b, err = decodeGppSegment(s)
 		if err != nil {
 			return nil, errors.Wrap(err, "parse gpp subsection string")
 		}

@@ -17,6 +17,10 @@ const (
 	nsPerDs = int64(time.Millisecond * 100)
 )
 
+// maxFibonacciRangeIds is the default limit of IDs read from a Fibonacci range by the public functions.
+// It matches the maximal number of items of the Int(12) count; GPP section and subsection IDs are far fewer.
+const maxFibonacciRangeIds = 4095
+
 var PrecompiledFibonacci = map[int]int{0: 0, 1: 1, 2: 1, 3: 2, 4: 3, 5: 5, 6: 8, 7: 13, 8: 21, 9: 34, 10: 55, 11: 89, 12: 144, 13: 233}
 
 // ConsentReader provides additional Consent String-specific bit-reading
@@ -188,12 +192,35 @@ func (r *ConsentReader) ReadRangeEntries(n uint) ([]*RangeEntry, error) {
 // - (per item) Boolean - representing whether the item is a single ID (0/false) or a group of IDs (1/true)
 // - (per item) int(Fibonacci) - representing a) the offset to a single ID or b) the offset to the start ID in case of a group (the offset is from the last seen number, or 0 for the first entry)
 // - (per item + only if group) int(Fibonacci) - length of the group
+// At most maxFibonacciRangeIds IDs are read; a longer range returns an error, so that a short
+// malformed range cannot expand into a huge slice.
 func (r *ConsentReader) ReadFibonacciRange() ([]int, error) {
+	return r.readFibonacciRange(maxFibonacciRangeIds)
+}
+
+// errFibonacciRangeTooLong is returned by readFibonacciRange when the range lists more IDs than allowed.
+var errFibonacciRangeTooLong = errors.New("fibonacci range lists too many ids")
+
+// errFibonacciIntOverflow is returned by readFibonacciRange when a Fibonacci encoded integer, or an ID
+// computed from it, overflows int.
+var errFibonacciIntOverflow = errors.New("fibonacci int overflows int")
+
+// maxInt is the maximal value of int (math.MaxInt requires Go 1.17).
+const maxInt = int(^uint(0) >> 1)
+
+// readFibonacciRange reads a range of Fibonacci encoded integers like ReadFibonacciRange, but returns
+// errFibonacciRangeTooLong as soon as the range lists more than maxIds IDs, so that a short malformed
+// range cannot expand into a huge slice. A negative maxIds means no limit.
+func (r *ConsentReader) readFibonacciRange(maxIds int) ([]int, error) {
 	var length int
 	var err error
 	// Get the amount of items to follow
 	if length, err = r.ReadInt(12); err != nil {
 		return nil, errors.WithMessage(err, "fibonacci length check")
+	}
+	// Each item lists at least one ID.
+	if maxIds >= 0 && length > maxIds {
+		return nil, errFibonacciRangeTooLong
 	}
 	var ret []int
 	for i := uint(0); i < uint(length); i++ {
@@ -212,11 +239,28 @@ func (r *ConsentReader) ReadFibonacciRange() ([]int, error) {
 		if offset, err = r.ReadFibonacciInt(); err != nil {
 			return nil, errors.WithMessage(err, "fibonacci range offset")
 		}
+		// A negative value means the Fibonacci encoded integer overflowed int.
+		// IDs are never negative, so lastSeen+offset overflows int if offset > maxInt-lastSeen.
+		if offset < 0 || offset > maxInt-lastSeen {
+			return nil, errFibonacciIntOverflow
+		}
 		if isRange {
 			// If a range, we need to get group length to add multiple values to the range.
 			var groupLength int
 			if groupLength, err = r.ReadFibonacciInt(); err != nil {
 				return nil, errors.WithMessage(err, "fibonacci range length")
+			}
+			if groupLength < 0 {
+				return nil, errFibonacciIntOverflow
+			}
+			// A group lists groupLength + 1 IDs. Compare against the remaining capacity, as
+			// len(ret)+groupLength+1 overflows int for a huge groupLength.
+			if maxIds >= 0 && groupLength >= maxIds-len(ret) {
+				return nil, errFibonacciRangeTooLong
+			}
+			// The last ID of the group, lastSeen+offset+groupLength, must not overflow int either.
+			if groupLength > maxInt-(lastSeen+offset) {
+				return nil, errFibonacciIntOverflow
 			}
 			// Add offset to last seen value as starting point of range.
 			lastSeen += offset
@@ -226,6 +270,9 @@ func (r *ConsentReader) ReadFibonacciRange() ([]int, error) {
 				lastSeen++
 			}
 		} else {
+			if maxIds >= 0 && len(ret)+1 > maxIds {
+				return nil, errFibonacciRangeTooLong
+			}
 			// If a single ID, add value to last seen value.
 			ret = append(ret, lastSeen+offset)
 		}
@@ -339,7 +386,7 @@ func (r *ConsentReader) ReadPublisherTCEntry() (*PublisherTCEntry, error) {
 //
 // Example Usage:
 //
-//   var pc, err = iabconsent.Parse("BONJ5bvONJ5bvAMAPyFRAL7AAAAMhuqKklS-gAAAAAAAAAAAAAAAAAAAAAAAAAA")
+//	var pc, err = iabconsent.Parse("BONJ5bvONJ5bvAMAPyFRAL7AAAAMhuqKklS-gAAAAAAAAAAAAAAAAAAAAAAAAAA")
 //
 // Deprecated: Use ParseV1 to parse V1 consent strings.
 func Parse(s string) (*ParsedConsent, error) {
@@ -352,7 +399,7 @@ func Parse(s string) (*ParsedConsent, error) {
 //
 // Example Usage:
 //
-//   var pc, err = iabconsent.ParseV1("BONJ5bvONJ5bvAMAPyFRAL7AAAAMhuqKklS-gAAAAAAAAAAAAAAAAAAAAAAAAAA")
+//	var pc, err = iabconsent.ParseV1("BONJ5bvONJ5bvAMAPyFRAL7AAAAMhuqKklS-gAAAAAAAAAAAAAAAAAAAAAAAAAA")
 func ParseV1(s string) (*ParsedConsent, error) {
 	var b, err = base64.RawURLEncoding.DecodeString(s)
 	if err != nil {
@@ -395,7 +442,7 @@ func ParseV1(s string) (*ParsedConsent, error) {
 //
 // Example Usage:
 //
-//   var pc, err = iabconsent.ParseV2("COvzTO5OvzTO5BRAAAENAPCoALIAADgAAAAAAewAwABAAlAB6ABBFAAA")
+//	var pc, err = iabconsent.ParseV2("COvzTO5OvzTO5BRAAAENAPCoALIAADgAAAAAAewAwABAAlAB6ABBFAAA")
 func ParseV2(s string) (*V2ParsedConsent, error) {
 	var segments = strings.Split(s, ".")
 

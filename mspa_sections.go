@@ -45,6 +45,31 @@ const (
 	MspaUsTnV1StringLength = 48
 )
 
+// Lengths in bits of the v1 sections and core subsections, without padding.
+// Their segments are validated with isGppBitFieldLength.
+const (
+	mspaUsMnV1Bits     = 42
+	mspaUsMdV1CoreBits = 22
+	mspaUsInV1CoreBits = 24
+	mspaUsKyV1CoreBits = 24
+	mspaUsRiV1CoreBits = 24
+)
+
+// mspaUsV1SensitiveDataConsents is the number of 2 bit fields of the v1 Sensitive Data Consents subsections
+// of US Indiana, Kentucky and Rhode Island.
+const mspaUsV1SensitiveDataConsents = 8
+
+const (
+	// usMdGpcSubSectionId is the ID of the GPC subsection in the US Maryland section header.
+	usMdGpcSubSectionId = 1
+	// usInSensitiveDataConsentsSubSectionId is the ID of the Sensitive Data Consents subsection in the US Indiana section header.
+	usInSensitiveDataConsentsSubSectionId = 1
+	// usKySensitiveDataConsentsSubSectionId is the ID of the Sensitive Data Consents subsection in the US Kentucky section header.
+	usKySensitiveDataConsentsSubSectionId = 1
+	// usRiSensitiveDataConsentsSubSectionId is the ID of the Sensitive Data Consents subsection in the US Rhode Island section header.
+	usRiSensitiveDataConsentsSubSectionId = 1
+)
+
 type MspaUsNational struct {
 	GppSection
 }
@@ -109,6 +134,26 @@ type MspaUsTN struct {
 	GppSection
 }
 
+type MspaUsMN struct {
+	GppSection
+}
+
+type MspaUsMD struct {
+	GppSection
+}
+
+type MspaUsIN struct {
+	GppSection
+}
+
+type MspaUsKY struct {
+	GppSection
+}
+
+type MspaUsRI struct {
+	GppSection
+}
+
 // NewMspa returns a supported parser given a GPP Section ID.
 // If the SID is not yet supported, it will be null.
 func NewMspa(sid int, section string) GppSectionParser {
@@ -145,6 +190,16 @@ func NewMspa(sid int, section string) GppSectionParser {
 		return &MspaUsNJ{GppSection{sectionId: UsNewJerseySID, sectionValue: section}}
 	case UsTennesseeSID:
 		return &MspaUsTN{GppSection{sectionId: UsTennesseeSID, sectionValue: section}}
+	case UsMinnesotaSID:
+		return &MspaUsMN{GppSection{sectionId: UsMinnesotaSID, sectionValue: section}}
+	case UsMarylandSID:
+		return &MspaUsMD{GppSection{sectionId: UsMarylandSID, sectionValue: section}}
+	case UsIndianaSID:
+		return &MspaUsIN{GppSection{sectionId: UsIndianaSID, sectionValue: section}}
+	case UsKentuckySID:
+		return &MspaUsKY{GppSection{sectionId: UsKentuckySID, sectionValue: section}}
+	case UsRhodeIslandSID:
+		return &MspaUsRI{GppSection{sectionId: UsRhodeIslandSID, sectionValue: section}}
 	}
 	// Skip if no matching struct, as Section ID is not supported yet.
 	// Any newly supported Section IDs should be added as cases here.
@@ -969,4 +1024,311 @@ func (m *MspaUsTN) ParseConsent() (GppParsedConsent, error) {
 	}
 
 	return p, r.Err
+}
+
+func (m *MspaUsMN) ParseConsent() (GppParsedConsent, error) {
+	var segments = strings.Split(m.sectionValue, ".")
+
+	var b, err = decodeGppSegment(segments[0])
+	if err != nil {
+		return nil, errors.Wrap(err, "parse usmn consent string")
+	}
+
+	var r = NewConsentReader(b)
+
+	// This block of code directly describes the format of the payload.
+	// The spec for the consent string can be found here:
+	// https://github.com/InteractiveAdvertisingBureau/Global-Privacy-Platform/tree/main/Sections/US-States/MN
+	var p = &MspaParsedConsent{}
+	p.Version, _ = r.ReadInt(6)
+
+	if p.Version != 1 {
+		return nil, errors.New("unsupported version: " + fmt.Sprint(p.Version))
+	}
+
+	// validate the length of the bit string for v1
+	if !isGppBitFieldLength(segments[0], mspaUsMnV1Bits) {
+		return nil, errors.New("invalid consent string length for v1")
+	}
+
+	// ProcessingNotice
+	p.SharingNotice, _ = r.ReadMspaNotice()
+	p.SaleOptOutNotice, _ = r.ReadMspaNotice()
+	p.TargetedAdvertisingOptOutNotice, _ = r.ReadMspaNotice()
+	p.SaleOptOut, _ = r.ReadMspaOptOut()
+	p.TargetedAdvertisingOptOut, _ = r.ReadMspaOptOut()
+	p.SensitiveDataProcessingConsents, _ = r.ReadMspaBitfieldConsent(8)
+	p.KnownChildSensitiveDataConsents, _ = r.ReadMspaBitfieldConsent(1)
+	// AdditionalDataProcessingConsent
+	p.PersonalDataConsents, _ = r.ReadMspaConsent()
+	p.MspaCoveredTransaction, _ = r.ReadMspaNaYesNo()
+	p.MspaOptOutOptionMode, _ = r.ReadMspaNaYesNo()
+	p.MspaServiceProviderMode, _ = r.ReadMspaNaYesNo()
+
+	if len(segments) > 1 {
+		var gppSubsectionConsent *GppSubSection
+		gppSubsectionConsent, err = ParseGppSubSections(segments[1:])
+		if err != nil {
+			return p, err
+		}
+		p.Gpc = gppSubsectionConsent.Gpc
+	}
+
+	return p, r.Err
+}
+
+// isGppBitFieldLength reports whether segment s has a valid length for a bit field of the given number of bits.
+// The GPP spec pads a bit field with 0s to a multiple of 6 bits, while encoders such as iabgpp-java and iabgpp-es
+// pad it to a whole byte first, so ceil(bits/6) to ceil(roundUp8(bits)/6) characters are valid.
+// Segments validated with it must be decoded with decodeGppSegment, which keeps all 6 bits of each character.
+// The decoded size cannot be used for validation, because decodeGppSegment pads it to a multiple of 24 bits.
+func isGppBitFieldLength(s string, bits int) bool {
+	var minChars = (bits + 5) / 6
+	var maxChars = ((bits+7)/8*8 + 5) / 6
+	return len(s) >= minChars && len(s) <= maxChars
+}
+
+// mspaSectionHeader is the header of sections which encode their own section header
+// (e.g. US Maryland, Indiana, Kentucky, Rhode Island). Format is:
+// SectionID	Int(6)	Section ID from the Section IDs list
+// Version	Int(6)	The version of this section specification used to encode the string
+// SubSections	Range(Fibonacci)	List of subsection IDs that are contained in this section, in the
+// order they appear in the string. The Core subsection (ID 0) is always present first and not listed.
+type mspaSectionHeader struct {
+	SectionId   int
+	Version     int
+	SubSections []int
+}
+
+// parseMspaSectionHeader parses the section header of sections which encode their own section header.
+// It returns errFibonacciRangeTooLong if the header lists more than maxSubSections subsections.
+func parseMspaSectionHeader(s string, maxSubSections int) (*mspaSectionHeader, error) {
+	if len(s) < gppHeaderMinLength {
+		return nil, errors.New("header too short")
+	}
+	var b, err = decodeGppSegment(s)
+	if err != nil {
+		return nil, errors.Wrap(err, "decode section header")
+	}
+	var r = NewConsentReader(b)
+	var h = &mspaSectionHeader{}
+	if h.SectionId, err = r.ReadInt(6); err != nil {
+		return nil, errors.WithMessage(err, "read section id")
+	}
+	if h.Version, err = r.ReadInt(6); err != nil {
+		return nil, errors.WithMessage(err, "read version")
+	}
+	if h.SubSections, err = r.readFibonacciRange(maxSubSections); err != nil {
+		return nil, errors.WithMessage(err, "read subsections")
+	}
+	return h, nil
+}
+
+// splitMspaSectionWithHeader splits a section of format {section header}.{core}[.{subsection}...] into
+// its segments, and parses and validates the section header against the expected Section ID.
+// It guarantees that segments contain exactly the core segment and the subsections listed in the header.
+// Version validation is left to the caller.
+func splitMspaSectionWithHeader(sid int, key string, sectionValue string) (*mspaSectionHeader, []string, error) {
+	var segments = strings.Split(sectionValue, ".")
+	if len(segments) < 2 {
+		return nil, nil, errors.Errorf("parse %s consent string: missing core subsection", key)
+	}
+
+	// Subsections listed in the header are limited to the segments passed after the core subsection,
+	// so that a malformed header cannot expand into a huge list of subsection IDs.
+	var header, err = parseMspaSectionHeader(segments[0], len(segments)-2)
+	if errors.Cause(err) == errFibonacciRangeTooLong {
+		return nil, nil, errors.Errorf("parse %s section header: mismatch number of subsections: header lists more than the %d found",
+			key, len(segments)-2)
+	} else if err != nil {
+		return nil, nil, errors.Wrapf(err, "parse %s section header", key)
+	}
+	if header.SectionId != sid {
+		return nil, nil, errors.Errorf("parse %s section header: section id mismatch: expected %d, got %d", key, sid, header.SectionId)
+	}
+	if len(header.SubSections) != len(segments)-2 {
+		return nil, nil, errors.Errorf("parse %s section header: mismatch number of subsections: header lists %d, found %d",
+			key, len(header.SubSections), len(segments)-2)
+	}
+	return header, segments, nil
+}
+
+// mspaSubSectionParser parses a single base64 encoded subsection segment into p.
+type mspaSubSectionParser func(p *MspaParsedConsent, subSection string) error
+
+// parseMspaSubSections parses the subsections of a section which encodes its own section header.
+// Subsections appear in the string in the order listed in the section header, and each one is parsed
+// with the parser registered for its subsection ID. Subsections without a parser are skipped.
+// segments must be validated by splitMspaSectionWithHeader.
+func parseMspaSubSections(key string, p *MspaParsedConsent, header *mspaSectionHeader, segments []string,
+	parsers map[int]mspaSubSectionParser) error {
+	for i, subSectionId := range header.SubSections {
+		if parse, ok := parsers[subSectionId]; ok {
+			if err := parse(p, segments[i+2]); err != nil {
+				return errors.WithMessage(err, fmt.Sprintf("parse %s subsection %d", key, subSectionId))
+			}
+		}
+	}
+	return nil
+}
+
+// parseMspaGpcSubSection parses a GPC subsection and sets p.Gpc.
+func parseMspaGpcSubSection(p *MspaParsedConsent, subSection string) error {
+	var gppSubsectionConsent, err = ParseGppSubSections([]string{subSection})
+	if err != nil {
+		return err
+	}
+	p.Gpc = gppSubsectionConsent.Gpc
+	return nil
+}
+
+// newMspaSensitiveDataConsentsSubSectionParser returns a parser of a Sensitive Data Consents subsection
+// with the given number of 2 bit consent fields.
+func newMspaSensitiveDataConsentsSubSectionParser(fields uint) mspaSubSectionParser {
+	return func(p *MspaParsedConsent, subSection string) error {
+		if !isGppBitFieldLength(subSection, int(fields)*2) {
+			return errors.New("invalid sensitive data consents subsection length")
+		}
+		var b, err = decodeGppSegment(subSection)
+		if err != nil {
+			return errors.Wrap(err, "parse sensitive data consents subsection")
+		}
+		var r = NewConsentReader(b)
+		p.SensitiveDataProcessingConsents, err = r.ReadMspaBitfieldConsent(fields)
+		return err
+	}
+}
+
+// mspaSectionWithHeader describes a v1 section which encodes its own section header, in the format
+// {section header}.{core}[.{subsection}...]. The core subsection of all such sections is:
+// MspaVersion, MspaCoveredTransaction, MspaMode, the notices and opt-outs,
+// optionally KnownChildSensitiveDataConsents, and PersonalDataConsents.
+type mspaSectionWithHeader struct {
+	// key is the section's API prefix used in error messages, e.g. "usmd".
+	key string
+	// coreBits is the length in bits of the v1 core subsection, without padding.
+	coreBits int
+	// hasKnownChildSensitiveDataConsents is whether the core subsection contains
+	// the KnownChildSensitiveDataConsents field.
+	hasKnownChildSensitiveDataConsents bool
+	// sensitiveDataConsents is the number of SensitiveDataProcessingConsents fields of the section's optional
+	// Sensitive Data Consents subsection, or 0 if the section has no such subsection. If the subsection is absent,
+	// all fields are set to ConsentNotApplicable, like the defaults of iabgpp-java.
+	sensitiveDataConsents uint
+	// subSectionParsers maps subsection IDs to their parsers. Subsections without a parser are skipped.
+	subSectionParsers map[int]mspaSubSectionParser
+}
+
+// Specs of the sections which encode their own section header. They are package level, so that
+// parsers are not allocated on each parsed consent string.
+// Spec for each section can be found at:
+// https://github.com/InteractiveAdvertisingBureau/Global-Privacy-Platform/tree/main/Sections/US-States/{MD,IN,KY,RI}
+var (
+	mspaUsMdSection = mspaSectionWithHeader{
+		key:      "usmd",
+		coreBits: mspaUsMdV1CoreBits,
+		subSectionParsers: map[int]mspaSubSectionParser{
+			usMdGpcSubSectionId: parseMspaGpcSubSection,
+		},
+	}
+	mspaUsInSection = mspaSectionWithHeader{
+		key:                                "usin",
+		coreBits:                           mspaUsInV1CoreBits,
+		hasKnownChildSensitiveDataConsents: true,
+		sensitiveDataConsents:              mspaUsV1SensitiveDataConsents,
+		subSectionParsers: map[int]mspaSubSectionParser{
+			usInSensitiveDataConsentsSubSectionId: newMspaSensitiveDataConsentsSubSectionParser(mspaUsV1SensitiveDataConsents),
+		},
+	}
+	mspaUsKySection = mspaSectionWithHeader{
+		key:                                "usky",
+		coreBits:                           mspaUsKyV1CoreBits,
+		hasKnownChildSensitiveDataConsents: true,
+		sensitiveDataConsents:              mspaUsV1SensitiveDataConsents,
+		subSectionParsers: map[int]mspaSubSectionParser{
+			usKySensitiveDataConsentsSubSectionId: newMspaSensitiveDataConsentsSubSectionParser(mspaUsV1SensitiveDataConsents),
+		},
+	}
+	mspaUsRiSection = mspaSectionWithHeader{
+		key:                                "usri",
+		coreBits:                           mspaUsRiV1CoreBits,
+		hasKnownChildSensitiveDataConsents: true,
+		sensitiveDataConsents:              mspaUsV1SensitiveDataConsents,
+		subSectionParsers: map[int]mspaSubSectionParser{
+			usRiSensitiveDataConsentsSubSectionId: newMspaSensitiveDataConsentsSubSectionParser(mspaUsV1SensitiveDataConsents),
+		},
+	}
+)
+
+// parse parses a v1 section with a section header. Consistent with the other US state sections, it returns
+// a nil consent on header, decoding, version and length errors, and the partially parsed consent together
+// with the error on core field read or subsection errors.
+// It returns the GppParsedConsent interface (not *MspaParsedConsent), so that a nil result is a nil interface.
+func (s *mspaSectionWithHeader) parse(sid int, sectionValue string) (GppParsedConsent, error) {
+	var header, segments, err = splitMspaSectionWithHeader(sid, s.key, sectionValue)
+	if err != nil {
+		return nil, err
+	}
+	if header.Version != 1 {
+		return nil, errors.Errorf("parse %s consent string: unsupported version: %d", s.key, header.Version)
+	}
+
+	// validate the length of the core subsection for v1
+	if !isGppBitFieldLength(segments[1], s.coreBits) {
+		return nil, errors.Errorf("parse %s consent string: invalid consent string length for v1", s.key)
+	}
+
+	var b []byte
+	b, err = decodeGppSegment(segments[1])
+	if err != nil {
+		return nil, errors.Wrapf(err, "parse %s consent string", s.key)
+	}
+
+	var r = NewConsentReader(b)
+
+	// This block of code directly describes the format of the core subsection.
+	var p = &MspaParsedConsent{Version: header.Version}
+	p.MspaVersion, _ = r.ReadInt(6)
+	p.MspaCoveredTransaction, _ = r.ReadMspaNaYesNo()
+	p.MspaMode, _ = r.ReadMspaMode()
+	// ProcessingNotice
+	p.SharingNotice, _ = r.ReadMspaNotice()
+	p.SaleOptOutNotice, _ = r.ReadMspaNotice()
+	p.TargetedAdvertisingOptOutNotice, _ = r.ReadMspaNotice()
+	p.SaleOptOut, _ = r.ReadMspaOptOut()
+	p.TargetedAdvertisingOptOut, _ = r.ReadMspaOptOut()
+	if s.hasKnownChildSensitiveDataConsents {
+		p.KnownChildSensitiveDataConsents, _ = r.ReadMspaBitfieldConsent(1)
+	}
+	// AdditionalDataProcessingConsent
+	p.PersonalDataConsents, _ = r.ReadMspaConsent()
+
+	err = parseMspaSubSections(s.key, p, header, segments, s.subSectionParsers)
+	if s.sensitiveDataConsents > 0 && p.SensitiveDataProcessingConsents == nil {
+		// A new map for each consent, so that modifying one consent does not affect others.
+		p.SensitiveDataProcessingConsents = make(map[int]MspaConsent, s.sensitiveDataConsents)
+		for i := 0; i < int(s.sensitiveDataConsents); i++ {
+			p.SensitiveDataProcessingConsents[i] = ConsentNotApplicable
+		}
+	}
+	if err != nil {
+		return p, err
+	}
+	return p, r.Err
+}
+
+func (m *MspaUsMD) ParseConsent() (GppParsedConsent, error) {
+	return mspaUsMdSection.parse(m.sectionId, m.sectionValue)
+}
+
+func (m *MspaUsIN) ParseConsent() (GppParsedConsent, error) {
+	return mspaUsInSection.parse(m.sectionId, m.sectionValue)
+}
+
+func (m *MspaUsKY) ParseConsent() (GppParsedConsent, error) {
+	return mspaUsKySection.parse(m.sectionId, m.sectionValue)
+}
+
+func (m *MspaUsRI) ParseConsent() (GppParsedConsent, error) {
+	return mspaUsRiSection.parse(m.sectionId, m.sectionValue)
 }
